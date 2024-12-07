@@ -2,7 +2,8 @@
 # Local Flask + Three.js + Bootstrap AI Chat Application
 
 This project is a Local Flask-based web application that combines Bootstrap for styling and Three.js for 3D rendering. It provides a basic chat interface with the potential to integrate AI chatbot features and 3D visualizations.
-![image](https://github.com/user-attachments/assets/1348e096-73c5-4875-9eb8-7924904fb746)
+![image](https://github.com/user-attachments/assets/a4caee3d-fe83-4f5a-a0e2-8ae9b68b5116)
+
 
 
 ---
