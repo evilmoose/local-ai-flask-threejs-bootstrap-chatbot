@@ -1,27 +1,45 @@
-from flask import Blueprint, render_template, request, jsonify
-import ollama  # Assuming you're using the Ollama library
+from flask import Blueprint, render_template, request, jsonify, current_app
+import ollama
 
 app = Blueprint('app', __name__)
 
-conversations = []
+convo = []
+
+def stream_response(prompt):
+    convo.append({'role': 'user', 'content': prompt})  # Add user's message to convo
+    response = ''
+    try:
+        stream = ollama.chat(model='llama3.2', messages=convo, stream=True)
+        for chunk in stream:
+            content = chunk.get('message', {}).get('content', '')
+            response += content
+            yield content
+    except Exception as e:
+        print(f"Error: {e}")
+        yield f"Error: {e}"
+
+    convo.append({'role': 'assistant', 'content': response})  # Add assistant's response to convo
 
 @app.route("/")
 def index():
+    """Render the main page."""
     return render_template("index.html")
 
-@app.route("/chat", methods=["POST"])
+@app.route("/chat", methods=["GET", "POST"])
 def chat():
-    user_message = request.json.get("message")
-    if not user_message:
-        return jsonify({"error": "Message cannot be empty"}), 400
-    
-    # Pass the user message to the chatbot model
-    try:
-        response = ollama.chat(model="llama3.2", messages=[{"role": "user", "content": user_message}])
-        assistant_response = response['message']['content']  # Extract content from chatbot response
-    except Exception as e:
-        assistant_response = f"Error: {str(e)}"
+    if request.method == "GET":
+        prompt = request.args.get("message", "")
+        print(f"Received GET request with prompt: {prompt}")  # Debug log
+        if not prompt:
+            return jsonify({"error": "Message cannot be empty"}), 400
 
-    conversations.append({"user": user_message, "assistant": assistant_response})
-    return jsonify({"response": assistant_response, "conversations": conversations})
+        def generate_response():
+            for chunk in stream_response(prompt):
+                print(f"Streaming chunk: {chunk}")  # Debug log
+                yield f"data: {chunk}\n\n"
+            yield "data: [END]\n\n"
+
+        return current_app.response_class(generate_response(), content_type="text/event-stream")
+
+
 

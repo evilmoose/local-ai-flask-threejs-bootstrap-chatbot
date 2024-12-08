@@ -5,3 +5,4 @@ def create_app():
     from .app import app as main_app
     app.register_blueprint(main_app)
     return app
+
