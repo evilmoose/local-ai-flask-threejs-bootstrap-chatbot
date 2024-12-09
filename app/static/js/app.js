@@ -16,6 +16,7 @@ document.addEventListener("DOMContentLoaded", () => {
 const streamResponse = (message) => {
     const eventSource = new EventSource(`/chat?message=${encodeURIComponent(message)}`);
 
+    // Render the user's message
     renderMessage(`You: ${message}`, "user-message");
 
     const assistantDiv = document.createElement("div");
@@ -24,21 +25,22 @@ const streamResponse = (message) => {
 
     let assistantMessage = "";
 
+    // Handle incoming streamed data
     eventSource.onmessage = (event) => {
         if (event.data === "[END]") {
             eventSource.close(); // Gracefully close the connection
             return;
         }
         assistantMessage += event.data; // Append new chunks to the response
-        assistantDiv.textContent = assistantMessage.trim(); // Update assistant div
+        assistantDiv.textContent = `Assistant: ${assistantMessage.trim()}`; // Update assistant div
     };
     
+    // Handle errors during the streaming
     eventSource.onerror = () => {
         console.error("Connection lost while streaming response.");
-        renderMessage("Error: Unable to connect to the server.", "error-message");
+        assistantDiv.textContent = "Error: Unable to connect to the server.";
         eventSource.close();
-    };
-      
+    };   
 
     input.value = ""; // Clear input
 };
@@ -47,20 +49,22 @@ const streamResponse = (message) => {
 // Utility Functions
 const renderMessage = (message, type) => {
     const div = document.createElement("div");
-    div.className = type;
+    div.className = type; // Add appropriate CSS class based on type
     div.textContent = message;
     chatDisplay.appendChild(div);
-    chatDisplay.scrollTop = chatDisplay.scrollHeight; // Auto-scroll to the latest message
+
+    // Auto-scroll to the latest message
+    chatDisplay.scrollTop = chatDisplay.scrollHeight;
 };
 
 // Handle Send Message
 const handleSendMessage = () => {
-    const message = input.value.trim();
+    const message = input.value.trim(); // Clean up user input
     if (!message) {
         alert("Please type a message before sending."); // Notify user
         return;
     }
-    streamResponse(message);
-    input.value = ""; // Clear input
+    streamResponse(message); // Send the message to the backend
+    input.value = ""; // Clear the input field
 };
 
