@@ -39,6 +39,20 @@ def fetch_conversations(limit=10):
     conn.close()
     return conversations[::-1]  # Reverse for chronological order
 
+# Store conversations in the database
+def store_conversations(prompt, response):
+    conn = connect_db()
+    with conn.cursor() as cursor:
+        cursor.execute(
+            '''
+            INSERT INTO conversations (timestamp, prompt, response) 
+            VALUES (CURRENT_TIMESTAMP, %s, %s)
+            ''',
+            (prompt, response)
+        )
+    conn.commit()
+    conn.close()
+
 def stream_response(prompt):
     convo.append({'role': 'user', 'content': prompt})  # Add user's message to convo
     response = ''
