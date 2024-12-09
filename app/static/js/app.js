@@ -34,9 +34,11 @@ const streamResponse = (message) => {
     };
     
     eventSource.onerror = () => {
-        console.error("Connection lost while streaming response."); // Error handling
+        console.error("Connection lost while streaming response.");
+        renderMessage("Error: Unable to connect to the server.", "error-message");
         eventSource.close();
-    };   
+    };
+      
 
     input.value = ""; // Clear input
 };
