@@ -5,8 +5,12 @@ const chatDisplay = document.getElementById("chat-display");
 
 // Event Listeners
 document.addEventListener("DOMContentLoaded", () => {
-    sendButton.addEventListener("click", handleSendMessage);
+    if (!sendButton.listenerAttached) {
+        sendButton.addEventListener("click", handleSendMessage);
+        sendButton.listenerAttached = true; // Prevent re-attachment
+    }
 });
+
 
 // Streaming Chat Logic
 const streamResponse = (message) => {
