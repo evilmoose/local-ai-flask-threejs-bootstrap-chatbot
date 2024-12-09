@@ -54,7 +54,11 @@ const renderMessage = (message, type) => {
 // Handle Send Message
 const handleSendMessage = () => {
     const message = input.value.trim();
-    if (!message) return;
+    if (!message) {
+        alert("Please type a message before sending."); // Notify user
+        return;
+    }
     streamResponse(message);
+    input.value = ""; // Clear input
 };
 
