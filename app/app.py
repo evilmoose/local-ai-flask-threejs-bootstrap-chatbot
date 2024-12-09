@@ -1,9 +1,34 @@
+import os
+from dotenv import load_dotenv
 from flask import Blueprint, render_template, request, jsonify, current_app
+import psycopg
+from psycopg.rows import dict_row
 import ollama
+
+# Load environment variables from .env file
+load_dotenv()
+
+# Database connection parameters
+DB_PARAMS = {
+    'dbname': os.getenv('DB_NAME'),
+    'user': os.getenv('DB_USER'),
+    'password': os.getenv('DB_PASSWORD'),
+    'host': os.getenv('DB_HOST'),
+    'port': os.getenv('DB_PORT')
+}
 
 app = Blueprint('app', __name__)
 
 convo = []
+
+# Connect to the database
+def connect_db():
+    try:
+        conn = psycopg.connect(**DB_PARAMS)
+        return conn
+    except psycopg.OperationalError as e:
+        print(f"Database connection error: {e}")
+        raise
 
 def stream_response(prompt):
     convo.append({'role': 'user', 'content': prompt})  # Add user's message to convo
