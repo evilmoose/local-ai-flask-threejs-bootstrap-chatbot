@@ -57,9 +57,6 @@ def store_conversations(prompt, response):
 def stream_response(prompt):
     # convo.append({'role': 'user', 'content': prompt})  # Add user's message to convo
 
-    # Store the user's prompt in the database
-    store_conversations(prompt, None)
-
     # Fetch conversation history for context
     conversation_history = fetch_conversations()
 
