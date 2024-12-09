@@ -30,6 +30,15 @@ def connect_db():
         print(f"Database connection error: {e}")
         raise
 
+# Fetch conversations from the database
+def fetch_conversations(limit=10):
+    conn = connect_db()
+    with conn.cursor(row_factory=dict_row) as cursor:
+        cursor.execute('SELECT * FROM conversations ORDER BY timestamp DESC LIMIT %s', (limit,))
+        conversations = cursor.fetchall()
+    conn.close()
+    return conversations[::-1]  # Reverse for chronological order
+
 def stream_response(prompt):
     convo.append({'role': 'user', 'content': prompt})  # Add user's message to convo
     response = ''
