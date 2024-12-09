@@ -19,7 +19,7 @@ DB_PARAMS = {
 
 app = Blueprint('app', __name__)
 
-convo = []
+# convo = []
 
 # Connect to the database
 def connect_db():
@@ -53,11 +53,27 @@ def store_conversations(prompt, response):
     conn.commit()
     conn.close()
 
+# Generate and stream chatbot responses
 def stream_response(prompt):
-    convo.append({'role': 'user', 'content': prompt})  # Add user's message to convo
+    # convo.append({'role': 'user', 'content': prompt})  # Add user's message to convo
+
+    # Store the user's prompt in the database
+    store_conversations(prompt, None)
+
+    # Fetch conversation history for context
+    conversation_history = fetch_conversations()
+
+    # Prepare messages for the model
+    messages = [
+        {'role': 'user', 'content': row['prompt']} if row['response'] is None else
+        {'role': 'assistant', 'content': row['response']}
+        for row in conversation_history
+    ]
+    messages.append({'role': 'user', 'content': prompt})  # Add the current prompt
+
     response = ''
     try:
-        stream = ollama.chat(model='llama3.2', messages=convo, stream=True)
+        stream = ollama.chat(model='llama3.2', messages=messages, stream=True)
         for chunk in stream:
             content = chunk.get('message', {}).get('content', '')
             response += content
@@ -67,29 +83,43 @@ def stream_response(prompt):
         yield f"data: Error occurred while generating response\n\n"
 
 
-    convo.append({'role': 'assistant', 'content': response})  # Add assistant's response to convo
+    # Update the assistant's response in the database
+    store_conversations(prompt, response)
 
 @app.route("/")
 def index():
     """Render the main page."""
     return render_template("index.html")
 
+# chat route
 @app.route("/chat", methods=["GET", "POST"])
 def chat():
     if request.method == "GET":
-        prompt = request.args.get("message", "")
-        print(f"Received GET request with prompt: {prompt}")  # Debug log
+        prompt = request.args.get("message", "").strip()
+        #print(f"Received GET request with prompt: {prompt}")  # Debug log
 
-        if not prompt.strip():
+        if not prompt:
             return jsonify({"error": "Please type a message before sending."}), 400
 
         def generate_response():
             for chunk in stream_response(prompt):
-                print(f"Streaming chunk: {chunk}")  # Debug log
+                #print(f"Streaming chunk: {chunk}")  # Debug log
                 yield f"data: {chunk}\n\n"
             yield "data: [END]\n\n"
 
         return current_app.response_class(generate_response(), content_type="text/event-stream")
+    
+# Reset conversation history
+@app.route("/reset", methods=["POST"])
+def reset():
+    conn = connect_db()
+    with conn.cursor() as cursor:
+        cursor.execute('TRUNCATE TABLE conversations RESTART IDENTITY')
+    conn.commit()
+    conn.close()
+    return jsonify({"message": "Conversation history reset."})
+
+
 
 
 
