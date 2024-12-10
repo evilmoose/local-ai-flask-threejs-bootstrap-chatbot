@@ -1,18 +1,18 @@
-// Globals
 const input = document.getElementById("chat-input");
 const sendButton = document.getElementById("send-button");
 const chatDisplay = document.getElementById("chat-display");
+const typingIndicator = document.getElementById("typing-indicator");
+const darkModeToggle = document.getElementById("dark-mode-toggle");
 
-// Event Listeners
 document.addEventListener("DOMContentLoaded", () => {
     if (!sendButton.listenerAttached) {
         sendButton.addEventListener("click", handleSendMessage);
-        sendButton.listenerAttached = true; // Prevent re-attachment
+        sendButton.listenerAttached = true;
     }
+
+    darkModeToggle.addEventListener("click", toggleDarkMode);
 });
 
-
-// Streaming Chat Logic
 const streamResponse = (message) => {
     const eventSource = new EventSource(`/chat?message=${encodeURIComponent(message)}`);
 
@@ -20,36 +20,48 @@ const streamResponse = (message) => {
     renderMessage(`You: ${message}`, "user-message");
 
     const assistantDiv = document.createElement("div");
-    assistantDiv.className = "assistant-message";
+    assistantDiv.className = "assistant-message chat-bubble";
     chatDisplay.appendChild(assistantDiv);
 
-    let assistantMessage = "";
+    let assistantMessage = ""; // Initialize a container for the full response
 
-    // Handle incoming streamed data
+    typingIndicator.style.display = "block"; // Show typing indicator
+
     eventSource.onmessage = (event) => {
-        if (event.data === "[END]") {
-            eventSource.close(); // Gracefully close the connection
-            return;
+        try {
+            const chunk = event.data.trim(); // Plain text chunk
+            console.log("Chunk received:", chunk);
+
+            if (chunk === "[END]") {
+                console.log("Streaming ended.");
+                eventSource.close();
+                typingIndicator.style.display = "none"; // Hide typing indicator
+                return;
+            }
+
+            assistantMessage += chunk + " "; // Append the chunk
+            assistantDiv.innerHTML = assistantMessage.replace(/\n/g, "<br>").trim();
+            chatDisplay.scrollTop = chatDisplay.scrollHeight; // Scroll to the bottom
+        } catch (e) {
+            console.error("Error processing chunk:", e);
+            assistantDiv.innerHTML += "\n[Error: Invalid response format]";
         }
-        assistantMessage += event.data; // Append new chunks to the response
-        assistantDiv.textContent = `Assistant: ${assistantMessage.trim()}`; // Update assistant div
     };
-    
-    // Handle errors during the streaming
+
     eventSource.onerror = () => {
         console.error("Connection lost while streaming response.");
-        assistantDiv.textContent = "Error: Unable to connect to the server.";
+        assistantDiv.innerHTML += "\n[Error: Unable to connect to the server]";
+        typingIndicator.style.display = "none"; // Hide typing indicator
         eventSource.close();
-    };   
+    };
 
     input.value = ""; // Clear input
+    input.focus(); // Refocus input
 };
 
-
-// Utility Functions
 const renderMessage = (message, type) => {
     const div = document.createElement("div");
-    div.className = type; // Add appropriate CSS class based on type
+    div.className = `${type} chat-bubble`;
     div.textContent = message;
     chatDisplay.appendChild(div);
 
@@ -57,14 +69,32 @@ const renderMessage = (message, type) => {
     chatDisplay.scrollTop = chatDisplay.scrollHeight;
 };
 
-// Handle Send Message
 const handleSendMessage = () => {
-    const message = input.value.trim(); // Clean up user input
+    const message = input.value.trim();
     if (!message) {
-        alert("Please type a message before sending."); // Notify user
+        alert("Please type a message before sending.");
         return;
     }
-    streamResponse(message); // Send the message to the backend
-    input.value = ""; // Clear the input field
+    streamResponse(message);
 };
+
+const toggleDarkMode = () => {
+    document.body.classList.toggle("bg-dark");
+    document.body.classList.toggle("text-light");
+    chatDisplay.classList.toggle("bg-secondary");
+    chatDisplay.classList.toggle("text-light");
+
+    // Adjust chat bubble colors in dark mode
+    const userMessages = document.querySelectorAll(".user-message");
+    const assistantMessages = document.querySelectorAll(".assistant-message");
+
+    userMessages.forEach((bubble) => {
+        bubble.classList.toggle("bg-dark");
+    });
+
+    assistantMessages.forEach((bubble) => {
+        bubble.classList.toggle("bg-dark");
+    });
+};
+
 

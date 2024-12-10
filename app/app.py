@@ -4,8 +4,9 @@ from flask import Blueprint, render_template, request, jsonify, current_app
 import psycopg
 from psycopg.rows import dict_row
 import ollama
+import json
 
-# Load environment variables from .env file
+# Load environment variables
 load_dotenv()
 
 # Database connection parameters
@@ -18,8 +19,6 @@ DB_PARAMS = {
 }
 
 app = Blueprint('app', __name__)
-
-# convo = []
 
 # Connect to the database
 def connect_db():
@@ -40,73 +39,123 @@ def fetch_conversations(limit=10):
     return conversations[::-1]  # Reverse for chronological order
 
 # Store conversations in the database
-def store_conversations(prompt, response):
+def store_conversations(prompt, response, metadata):
     conn = connect_db()
     with conn.cursor() as cursor:
         cursor.execute(
             '''
-            INSERT INTO conversations (timestamp, prompt, response) 
-            VALUES (CURRENT_TIMESTAMP, %s, %s)
+            INSERT INTO conversations (timestamp, prompt, response, metadata) 
+            VALUES (CURRENT_TIMESTAMP, %s, %s, %s)
             ''',
-            (prompt, response)
+            (prompt, response, json.dumps(metadata))
         )
     conn.commit()
     conn.close()
 
-# Generate and stream chatbot responses
-def stream_response(prompt):
-    # convo.append({'role': 'user', 'content': prompt})  # Add user's message to convo
+# Load the dataset
+def load_dataset(file_path):
+    with open(file_path, 'r') as file:
+        return json.load(file)
 
-    # Fetch conversation history for context
-    conversation_history = fetch_conversations()
+# Load Rebecca's dataset and preprocess for lookups
+rebecca_dataset = load_dataset("rebecca_dataset.json")
+dataset_lookup = {entry["input"].lower(): entry for entry in rebecca_dataset}
 
-    # Prepare messages for the model
+# Default metadata as a reusable constant
+DEFAULT_METADATA = {"topic": "unknown", "mood": "neutral", "feedback": []}
+
+# Helper function for default metadata
+def get_default_metadata():
+    return DEFAULT_METADATA.copy()
+
+# Helper function to construct messages
+def construct_messages(prompt, dataset_response=None):
     messages = [
-        {'role': 'user', 'content': row['prompt']} if row['response'] is None else
-        {'role': 'assistant', 'content': row['response']}
-        for row in conversation_history
+        {"role": "system", "content": "You are a friendly and witty conversational assistant."},
+        {"role": "user", "content": prompt}
     ]
-    messages.append({'role': 'user', 'content': prompt})  # Add the current prompt
+    if dataset_response:
+        messages.append({
+            "role": "assistant",
+            "content": f"This is a suggested response: {dataset_response}. Please refine it to make it more original while maintaining tone."
+        })
+    return messages
 
+# Helper function to query the LLM
+def query_llm(messages):
     response = ''
     try:
         stream = ollama.chat(model='llama3.2', messages=messages, stream=True)
         for chunk in stream:
-            content = chunk.get('message', {}).get('content', '')
-            response += content
-            yield content
+            response += chunk.get('message', {}).get('content', '')
+    except Exception as e:
+        print(f"Error querying local model: {e}")
+        response = "Error generating a response."
+    return response.strip()
+
+# Main function: Query local model with dataset
+def query_local_model_with_dataset(prompt):
+    entry = dataset_lookup.get(prompt.lower())
+
+    if entry:
+        dataset_response = entry["output"]
+        metadata = entry.get("metadata", {})
+    else:
+        dataset_response = None
+        metadata = get_default_metadata()
+
+    messages = construct_messages(prompt, dataset_response)
+    response = query_llm(messages)
+    return {"response": response, "metadata": metadata}
+
+# Generate and stream chatbot responses
+def stream_response(prompt):
+    try:
+        result = query_local_model_with_dataset(prompt)
+        response = result["response"]
+
+        first_chunk = True  # State to track if it's the first chunk
+
+        for chunk in response.split('\n'):
+            cleaned_chunk = chunk.strip()
+            print(f"Streaming text chunk: {cleaned_chunk}")  # Debugging log
+
+            # Add "Rebecca:" prefix only for the first chunk
+            if first_chunk:
+                yield f"Rebecca: {cleaned_chunk}\n\n"
+                first_chunk = False  # Update state
+            else:
+                yield f"{cleaned_chunk}\n\n"
+
+        # Send [END] and reset state
+        yield "[END]\n\n"
+
     except Exception as e:
         print(f"Error in stream_response: {e}")
         yield f"data: Error occurred while generating response\n\n"
 
 
-    # Update the assistant's response in the database
-    store_conversations(prompt, response)
-
 @app.route("/")
 def index():
-    """Render the main page."""
     return render_template("index.html")
 
-# chat route
 @app.route("/chat", methods=["GET", "POST"])
 def chat():
     if request.method == "GET":
         prompt = request.args.get("message", "").strip()
-        #print(f"Received GET request with prompt: {prompt}")  # Debug log
-
         if not prompt:
             return jsonify({"error": "Please type a message before sending."}), 400
 
         def generate_response():
             for chunk in stream_response(prompt):
-                #print(f"Streaming chunk: {chunk}")  # Debug log
                 yield f"data: {chunk}\n\n"
-            yield "data: [END]\n\n"
 
-        return current_app.response_class(generate_response(), content_type="text/event-stream")
-    
-# Reset conversation history
+        return current_app.response_class(
+            generate_response(),
+            content_type="text/event-stream",
+            headers={"Cache-Control": "no-cache", "Connection": "keep-alive"}
+        )
+
 @app.route("/reset", methods=["POST"])
 def reset():
     conn = connect_db()
@@ -115,8 +164,3 @@ def reset():
     conn.commit()
     conn.close()
     return jsonify({"message": "Conversation history reset."})
-
-
-
-
-
