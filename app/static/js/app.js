@@ -3,71 +3,31 @@ const sendButton = document.getElementById("send-button");
 const chatDisplay = document.getElementById("chat-display");
 const typingIndicator = document.getElementById("typing-indicator");
 const darkModeToggle = document.getElementById("dark-mode-toggle");
+const systemPromptInput = document.getElementById("systemPrompt");
+const temperatureInput = document.getElementById("temperature");
+const param1Input = document.getElementById("param1");
+const param2Input = document.getElementById("param2");
 
+// Event listeners
 document.addEventListener("DOMContentLoaded", () => {
-    if (!sendButton.listenerAttached) {
-        sendButton.addEventListener("click", handleSendMessage);
-        sendButton.listenerAttached = true;
-    }
-
+    sendButton.addEventListener("click", handleSendMessage);
     darkModeToggle.addEventListener("click", toggleDarkMode);
+    systemPromptInput.addEventListener("change", updateSettings);
+    temperatureInput.addEventListener("change", updateSettings);
+    param1Input.addEventListener("change", updateSettings);
+    param2Input.addEventListener("change", updateSettings);
+
+    // Fetch initial settings
+    fetch("/settings")
+        .then(response => response.json())
+        .then(settings => {
+            systemPromptInput.value = settings.system_prompt;
+            temperatureInput.value = settings.temperature;
+            param1Input.value = settings.param_1 || ""; // Default empty if undefined
+            param2Input.value = settings.param_2 || ""; // Default empty if undefined
+        })
+        .catch(error => console.error("Error fetching settings:", error));
 });
-
-const streamResponse = (message) => {
-    const eventSource = new EventSource(`/chat?message=${encodeURIComponent(message)}`);
-
-    // Render the user's message
-    renderMessage(`You: ${message}`, "user-message");
-
-    const assistantDiv = document.createElement("div");
-    assistantDiv.className = "assistant-message chat-bubble";
-    chatDisplay.appendChild(assistantDiv);
-
-    let assistantMessage = ""; // Initialize a container for the full response
-
-    typingIndicator.style.display = "block"; // Show typing indicator
-
-    eventSource.onmessage = (event) => {
-        try {
-            const chunk = event.data.trim(); // Plain text chunk
-            console.log("Chunk received:", chunk);
-
-            if (chunk === "[END]") {
-                console.log("Streaming ended.");
-                eventSource.close();
-                typingIndicator.style.display = "none"; // Hide typing indicator
-                return;
-            }
-
-            assistantMessage += chunk + " "; // Append the chunk
-            assistantDiv.innerHTML = assistantMessage.replace(/\n/g, "<br>").trim();
-            chatDisplay.scrollTop = chatDisplay.scrollHeight; // Scroll to the bottom
-        } catch (e) {
-            console.error("Error processing chunk:", e);
-            assistantDiv.innerHTML += "\n[Error: Invalid response format]";
-        }
-    };
-
-    eventSource.onerror = () => {
-        console.error("Connection lost while streaming response.");
-        assistantDiv.innerHTML += "\n[Error: Unable to connect to the server]";
-        typingIndicator.style.display = "none"; // Hide typing indicator
-        eventSource.close();
-    };
-
-    input.value = ""; // Clear input
-    input.focus(); // Refocus input
-};
-
-const renderMessage = (message, type) => {
-    const div = document.createElement("div");
-    div.className = `${type} chat-bubble`;
-    div.textContent = message;
-    chatDisplay.appendChild(div);
-
-    // Auto-scroll to the latest message
-    chatDisplay.scrollTop = chatDisplay.scrollHeight;
-};
 
 const handleSendMessage = () => {
     const message = input.value.trim();
@@ -78,23 +38,62 @@ const handleSendMessage = () => {
     streamResponse(message);
 };
 
+const streamResponse = (message) => {
+    const eventSource = new EventSource(`/chat?message=${encodeURIComponent(message)}`);
+    renderMessage(`You: ${message}`, "user-message");
+
+    const assistantDiv = document.createElement("div");
+    assistantDiv.className = "assistant-message chat-bubble";
+    chatDisplay.appendChild(assistantDiv);
+
+    let assistantMessage = "";
+    typingIndicator.style.display = "block";
+
+    eventSource.onmessage = (event) => {
+        const chunk = event.data.trim();
+        if (chunk === "[END]") {
+            typingIndicator.style.display = "none";
+            eventSource.close();
+            return;
+        }
+        assistantMessage += chunk + " ";
+        assistantDiv.innerHTML = assistantMessage.replace(/\n/g, "<br>").trim();
+        chatDisplay.scrollTop = chatDisplay.scrollHeight;
+    };
+
+    eventSource.onerror = () => {
+        typingIndicator.style.display = "none";
+        assistantDiv.innerHTML += "\n[Error: Unable to connect to the server]";
+        eventSource.close();
+    };
+
+    input.value = "";
+    input.focus();
+};
+
+const updateSettings = () => {
+    const newSettings = {
+        system_prompt: systemPromptInput.value,
+        temperature: parseFloat(temperatureInput.value),
+        param_1: param1Input.value,
+        param_2: param2Input.value
+    };
+
+    fetch("/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(newSettings)
+    })
+        .then(response => response.json())
+        .then(updatedSettings => {
+            console.log("Settings updated:", updatedSettings);
+        })
+        .catch(error => console.error("Error updating settings:", error));
+};
+
 const toggleDarkMode = () => {
     document.body.classList.toggle("bg-dark");
     document.body.classList.toggle("text-light");
-    chatDisplay.classList.toggle("bg-secondary");
-    chatDisplay.classList.toggle("text-light");
-
-    // Adjust chat bubble colors in dark mode
-    const userMessages = document.querySelectorAll(".user-message");
-    const assistantMessages = document.querySelectorAll(".assistant-message");
-
-    userMessages.forEach((bubble) => {
-        bubble.classList.toggle("bg-dark");
-    });
-
-    assistantMessages.forEach((bubble) => {
-        bubble.classList.toggle("bg-dark");
-    });
 };
 
 

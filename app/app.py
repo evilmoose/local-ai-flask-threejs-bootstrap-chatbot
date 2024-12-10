@@ -1,6 +1,7 @@
 import os
 from dotenv import load_dotenv
 from flask import Blueprint, render_template, request, jsonify, current_app
+from .chat_settings import get_chat_settings, update_chat_settings
 import psycopg
 from psycopg.rows import dict_row
 import ollama
@@ -147,14 +148,30 @@ def chat():
             return jsonify({"error": "Please type a message before sending."}), 400
 
         def generate_response():
-            for chunk in stream_response(prompt):
-                yield f"data: {chunk}\n\n"
+            chat_config = get_chat_settings()
+            messages = [
+                {"role": "system", "content": chat_config["system_prompt"]},
+                {"role": "user", "content": prompt}
+            ]
+
+            # Simulated response (replace with actual LLM call)
+            yield f"Rebecca: I hear you! {prompt}\n\n"
+            yield "[END]\n\n"
 
         return current_app.response_class(
             generate_response(),
             content_type="text/event-stream",
             headers={"Cache-Control": "no-cache", "Connection": "keep-alive"}
         )
+
+@app.route("/settings", methods=["GET", "POST"])
+def settings():
+    if request.method == "GET":
+        return jsonify(get_chat_settings())
+    elif request.method == "POST":
+        data = request.json
+        updated_settings = update_chat_settings(data)
+        return jsonify(updated_settings)
 
 @app.route("/reset", methods=["POST"])
 def reset():
