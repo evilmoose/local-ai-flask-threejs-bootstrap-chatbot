@@ -5,34 +5,88 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
     <link rel="stylesheet" href="/static/css/styles.css">
-    <title>Rebecca's Chat</title>
+    <title>Advanced Chat UI</title>
 </head>
 <body class="bg-light">
-    <div class="container py-5">
-        <!-- Chat Header -->
-        <h1 class="text-center mb-4">Rebecca's Chat</h1>
-        <div class="d-flex justify-content-end mb-3">
-            <button id="dark-mode-toggle" class="btn btn-secondary">Toggle Dark Mode</button>
-        </div>
+    <div class="container-fluid vh-100 d-flex flex-column">
+        <!-- Header Section -->
+        <header class="d-flex align-items-center px-3 py-2 border-bottom">
+            <h2 class="me-auto">Rebecca's Chat</h2>
+            <button id="dark-mode-toggle" class="btn btn-secondary me-2">Toggle Dark Mode</button>
+            <button class="btn btn-outline-primary" data-bs-toggle="offcanvas" data-bs-target="#settingsPanel">
+                <i class="bi bi-sliders"></i> Settings
+            </button>
+        </header>
 
-        <!-- Three.js Visualization Container -->
-        <div id="threejs-container" class="border p-3 mb-4" style="height: 400px; background-color: #f8f9fa;">
-            <!-- Three.js visualization will load here -->
-        </div>
+        <!-- Main Content -->
+        <div class="row flex-grow-1">
+            <!-- Sidebar -->
+            <nav class="col-3 border-end bg-white p-3">
+                <ul class="list-unstyled">
+                    <li class="mb-3">
+                        <button class="btn btn-primary w-100">New Chat</button>
+                    </li>
+                    <li class="mb-3">
+                        <button class="btn btn-outline-secondary w-100">Archived Chats</button>
+                    </li>
+                    <li class="mb-3">
+                        <button class="btn btn-outline-secondary w-100">Workspace</button>
+                    </li>
+                </ul>
+            </nav>
 
-        <!-- Chat Container -->
-        <div id="chat-container" class="border p-3 bg-white">
-            <div id="chat-display"></div>
-            <div id="typing-indicator" class="text-muted small mb-2" style="display: none;">Rebecca is typing...</div>
-            <div class="input-group">
-                <input id="chat-input" type="text" class="form-control" placeholder="Type your message..." aria-label="Chat input">
-                <button id="send-button" class="btn btn-primary">Send</button>
+            <!-- Main Panel -->
+            <main class="col-9 d-flex flex-column">
+                <!-- 3D Avatar Container -->
+                <div id="threejs-container" class="border p-3 mb-3" style="height: 200px; background-color: #f8f9fa;">
+                    <!-- Placeholder for Three.js integration -->
+                </div>
+
+                <!-- Chat Section -->
+                <div id="chat-container" class="flex-grow-1 d-flex flex-column border bg-white p-3">
+                    <div id="chat-display" class="flex-grow-1 overflow-auto mb-2"></div>
+                    <div id="typing-indicator" class="text-muted small mb-2" style="display: none;">Rebecca is typing...</div>
+                    <div class="input-group">
+                        <input id="chat-input" type="text" class="form-control" placeholder="Type your message...">
+                        <button id="send-button" class="btn btn-primary">Send</button>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <!-- Settings Panel -->
+    <div class="offcanvas offcanvas-end" tabindex="-1" id="settingsPanel">
+        <div class="offcanvas-header">
+            <h5 class="offcanvas-title">Chat Controls</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
+        </div>
+        <div class="offcanvas-body">
+            <div class="mb-3">
+                <label for="systemPrompt" class="form-label">System Prompt</label>
+                <textarea id="systemPrompt" class="form-control" rows="3" placeholder="Enter system prompt..."></textarea>
+            </div>
+            <div class="accordion" id="advancedSettings">
+                <div class="accordion-item">
+                    <h2 class="accordion-header" id="headingAdvancedParams">
+                        <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#collapseAdvancedParams" aria-expanded="true">
+                            Advanced Parameters
+                        </button>
+                    </h2>
+                    <div id="collapseAdvancedParams" class="accordion-collapse collapse show">
+                        <div class="accordion-body">
+                            <label for="temperature" class="form-label">Temperature</label>
+                            <input type="range" id="temperature" class="form-range" min="0" max="1" step="0.1" value="0.7">
+                            <label for="param1" class="form-label">Param 1</label>
+                            <input type="number" id="topK" class="form-control" placeholder="Enter Param 1">
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
 
-    <!-- Scripts -->
-    <script src="https://cdn.jsdelivr.net/npm/three@latest/build/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script src="/static/js/app.js" defer></script>
 </body>
 </html>
