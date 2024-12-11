@@ -27,6 +27,11 @@ document.addEventListener("DOMContentLoaded", () => {
             param2Input.value = settings.param_2 || ""; // Default empty if undefined
         })
         .catch(error => console.error("Error fetching settings:", error));
+
+    // Simulate proactive message after a delay
+    setTimeout(() => {
+        renderProactiveMessage("Hi there! Just checking in. How’s your day going?");
+    }, 30000); // Trigger proactive message after 30 seconds
 });
 
 const handleSendMessage = () => {
@@ -61,7 +66,7 @@ const streamResponse = (message) => {
         chatDisplay.scrollTop = chatDisplay.scrollHeight;
     };
 
-    eventSource.onerror = () => {
+    eventSource.onerror = (error) => {
         typingIndicator.style.display = "none";
         assistantDiv.innerHTML += "\n[Error: Unable to connect to the server]";
         eventSource.close();
@@ -69,6 +74,14 @@ const streamResponse = (message) => {
 
     input.value = "";
     input.focus();
+};
+
+const renderProactiveMessage = (message) => {
+    const div = document.createElement("div");
+    div.className = "assistant-message proactive";
+    div.textContent = `Rebecca: ${message}`;
+    chatDisplay.appendChild(div);
+    chatDisplay.scrollTop = chatDisplay.scrollHeight;
 };
 
 const updateSettings = () => {
@@ -96,4 +109,10 @@ const toggleDarkMode = () => {
     document.body.classList.toggle("text-light");
 };
 
-
+const renderMessage = (message, className) => {
+    const div = document.createElement("div");
+    div.className = className || "chat-bubble";
+    div.innerHTML = message.replace(/\n/g, "<br>");
+    chatDisplay.appendChild(div);
+    chatDisplay.scrollTop = chatDisplay.scrollHeight;
+};

@@ -2,4 +2,4 @@
 .env
 ignore
 app/__pycache__
-rebecca_dataset.json
+app/rebecca_dataset.json

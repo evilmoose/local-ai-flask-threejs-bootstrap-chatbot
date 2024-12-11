@@ -1,57 +1,16 @@
-import os
-from dotenv import load_dotenv
 from flask import Blueprint, render_template, request, jsonify, current_app
+from apscheduler.schedulers.background import BackgroundScheduler
 from .chat_settings import get_chat_settings, update_chat_settings
-import psycopg
-from psycopg.rows import dict_row
+from .utils.context_manager import get_user_context, update_user_context
+from .utils.db_utils import connect_db
 import ollama
 import json
 
-# Load environment variables
-load_dotenv()
-
-# Database connection parameters
-DB_PARAMS = {
-    'dbname': os.getenv('DB_NAME'),
-    'user': os.getenv('DB_USER'),
-    'password': os.getenv('DB_PASSWORD'),
-    'host': os.getenv('DB_HOST'),
-    'port': os.getenv('DB_PORT')
-}
-
 app = Blueprint('app', __name__)
 
-# Connect to the database
-def connect_db():
-    try:
-        conn = psycopg.connect(**DB_PARAMS)
-        return conn
-    except psycopg.OperationalError as e:
-        print(f"Database connection error: {e}")
-        raise
-
-# Fetch conversations from the database
-def fetch_conversations(limit=10):
-    conn = connect_db()
-    with conn.cursor(row_factory=dict_row) as cursor:
-        cursor.execute('SELECT * FROM conversations ORDER BY timestamp DESC LIMIT %s', (limit,))
-        conversations = cursor.fetchall()
-    conn.close()
-    return conversations[::-1]  # Reverse for chronological order
-
-# Store conversations in the database
-def store_conversations(prompt, response, metadata):
-    conn = connect_db()
-    with conn.cursor() as cursor:
-        cursor.execute(
-            '''
-            INSERT INTO conversations (timestamp, prompt, response, metadata) 
-            VALUES (CURRENT_TIMESTAMP, %s, %s, %s)
-            ''',
-            (prompt, response, json.dumps(metadata))
-        )
-    conn.commit()
-    conn.close()
+# Scheduler for proactive messages
+scheduler = BackgroundScheduler()
+scheduler.start()
 
 # Load the dataset
 def load_dataset(file_path):
@@ -59,7 +18,7 @@ def load_dataset(file_path):
         return json.load(file)
 
 # Load Rebecca's dataset and preprocess for lookups
-rebecca_dataset = load_dataset("rebecca_dataset.json")
+rebecca_dataset = load_dataset("./app/rebecca_dataset.json")
 dataset_lookup = {entry["input"].lower(): entry for entry in rebecca_dataset}
 
 # Default metadata as a reusable constant
@@ -95,7 +54,9 @@ def query_llm(messages):
     return response.strip()
 
 # Main function: Query local model with dataset
-def query_local_model_with_dataset(prompt):
+def query_local_model_with_dataset(prompt, user_id):
+    # Intergrate user context
+    user_context = get_user_context(user_id)
     entry = dataset_lookup.get(prompt.lower())
 
     if entry:
@@ -107,12 +68,16 @@ def query_local_model_with_dataset(prompt):
 
     messages = construct_messages(prompt, dataset_response)
     response = query_llm(messages)
+
+    # Update user context
+    update_user_context(user_id, {"last_topic": prompt})
+
     return {"response": response, "metadata": metadata}
 
 # Generate and stream chatbot responses
 def stream_response(prompt):
     try:
-        result = query_local_model_with_dataset(prompt)
+        result = query_local_model_with_dataset(prompt, user_id=1)
         response = result["response"]
 
         first_chunk = True  # State to track if it's the first chunk
@@ -148,21 +113,23 @@ def chat():
             return jsonify({"error": "Please type a message before sending."}), 400
 
         def generate_response():
-            chat_config = get_chat_settings()
-            messages = [
-                {"role": "system", "content": chat_config["system_prompt"]},
-                {"role": "user", "content": prompt}
-            ]
+            try:
+                result = query_local_model_with_dataset(prompt, user_id=1)
+                response = result["response"]
 
-            # Simulated response (replace with actual LLM call)
-            yield f"Rebecca: I hear you! {prompt}\n\n"
-            yield "[END]\n\n"
+                for chunk in response.split('\n'):
+                    yield f"data: {chunk}\n\n"  # Proper SSE format
+                yield "data: [END]\n\n"
+            except Exception as e:
+                print(f"Error in generate_response: {e}")
+                yield "data: Error occurred while generating response\n\n"
 
         return current_app.response_class(
             generate_response(),
             content_type="text/event-stream",
             headers={"Cache-Control": "no-cache", "Connection": "keep-alive"}
         )
+
 
 @app.route("/settings", methods=["GET", "POST"])
 def settings():
@@ -172,6 +139,12 @@ def settings():
         data = request.json
         updated_settings = update_chat_settings(data)
         return jsonify(updated_settings)
+    
+# Proactive message example
+def send_proactive_message(user_id):
+    user_context = get_user_context(user_id)
+    message = f"Hi! Last time, we discussed {user_context.get('last_topic', 'interesting topics')}."
+    print(f"Proactive Message to User {user_id}: {message}")
 
 @app.route("/reset", methods=["POST"])
 def reset():
@@ -181,3 +154,11 @@ def reset():
     conn.commit()
     conn.close()
     return jsonify({"message": "Conversation history reset."})
+
+# Schedule proactive messages
+scheduler.add_job(
+    send_proactive_message,
+    "interval",
+    hours=6,
+    args=[1]  # Example user ID
+)
