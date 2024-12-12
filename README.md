@@ -1,7 +1,7 @@
 # Rebecca: Local AI Chatbot with Proactive Features
 
 ## Overview
-Rebecca is a warm, engaging, and proactive chatbot application designed for personalized and meaningful interactions. Built using Flask and Llama3.2, Rebecca employs advanced contextual awareness, proactive messaging, and a friendly tone to create an emotionally intelligent companion.
+Rebecca is a warm, engaging, and proactive chatbot application designed for personalized and meaningful interactions. Built using Flask and Llama3.2, Rebecca employs advanced contextual awareness, proactive messaging, and a friendly tone to create an emotionally intelligent companion/assistant/chatbot.
 
 ---
 
