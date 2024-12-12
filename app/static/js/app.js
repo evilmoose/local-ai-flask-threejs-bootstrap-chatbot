@@ -52,54 +52,148 @@ const streamResponse = (message) => {
     chatDisplay.appendChild(assistantDiv);
 
     let assistantMessage = "";
-    typingIndicator.style.display = "block";
+    typingIndicator.style.display = "block"; // Show typing indicator
 
     eventSource.onmessage = (event) => {
         const chunk = event.data.trim();
         if (chunk === "[END]") {
-            typingIndicator.style.display = "none";
-            eventSource.close();
+            typingIndicator.style.display = "none"; // Hide typing indicator
+            eventSource.close(); // Close connection
             return;
         }
+
         assistantMessage += chunk + " ";
         assistantDiv.innerHTML = assistantMessage.replace(/\n/g, "<br>").trim();
-        chatDisplay.scrollTop = chatDisplay.scrollHeight;
+        chatDisplay.scrollTop = chatDisplay.scrollHeight; // Auto-scroll
     };
 
     eventSource.onerror = (error) => {
-        typingIndicator.style.display = "none";
-        assistantDiv.innerHTML += "\n[Error: Unable to connect to the server]";
-        eventSource.close();
+        typingIndicator.style.display = "none"; // Hide typing indicator
+        renderMessage("[Error: Unable to fetch a response from the server. Please try again.]", "error-message");
+        eventSource.close(); // Close connection
     };
 
     input.value = "";
     input.focus();
 };
 
-const renderProactiveMessage = (message) => {
-    const div = document.createElement("div");
-    div.className = "assistant-message proactive";
-    div.textContent = `Rebecca: ${message}`;
-    chatDisplay.appendChild(div);
-    chatDisplay.scrollTop = chatDisplay.scrollHeight;
+let eventSource = null; // Declare globally to manage the connection
+
+const connectProactiveMessages = () => {
+    if (eventSource) {
+        eventSource.close(); // Close existing connection if it exists
+        console.log("DEBUG: Closed existing EventSource connection.");
+    }
+
+    eventSource = new EventSource("/proactive");
+
+    eventSource.onmessage = (event) => {
+        const message = event.data.trim();
+        if (message && message !== "[END]") {
+            renderProactiveMessage(message);
+        }
+    };
+
+    eventSource.onerror = (error) => {
+        console.error("Error in proactive message stream. Attempting to reconnect...");
+        eventSource.close();
+
+        // Reconnect after an error
+        setTimeout(() => {
+            connectProactiveMessages();
+        }, 5000);
+    };
 };
 
+window.addEventListener("beforeunload", () => {
+    if (eventSource) {
+        eventSource.close();
+        console.log("DEBUG: EventSource connection closed on window unload.");
+    }
+});
+
+connectProactiveMessages();
+
+
+// Close SSE when user starts typing
+const chatInput = document.getElementById("chat-input"); // Replace with your input field ID
+chatInput.addEventListener("input", () => {
+    if (eventSource) {
+        console.log("User started typing. Closing proactive message stream...");
+        eventSource.close();
+        eventSource = null; // Clean up reference
+    }
+});
+
+// Reconnect if needed (optional)
+const reconnectProactiveMessages = () => {
+    if (!eventSource) {
+        console.log("Reconnecting proactive messages...");
+        connectProactiveMessages();
+    }
+};
+
+// Optionally, reconnect after a period of inactivity
+let typingTimeout;
+
+chatInput.addEventListener("input", () => {
+    clearTimeout(typingTimeout);
+    typingTimeout = setTimeout(() => {
+        reconnectProactiveMessages();
+    }, 30000); // Reconnect after 30 seconds of no typing
+});
+
+// Initialize connection on page load
+document.addEventListener("DOMContentLoaded", () => {
+    connectProactiveMessages();
+});
+
+
+const renderProactiveMessage = (message) => {
+    // Fallback if the message is null or not a string
+    if (!message || typeof message !== "string") {
+        message = "Hello! How can I assist you today?";
+    }
+
+    // Create a new div for the proactive message
+    const div = document.createElement("div");
+    div.className = "assistant-message proactive"; // Preserve original class names
+    div.textContent = `Rebecca: ${message}`;
+
+    // Ensure the chat display element exists
+    if (chatDisplay) {
+        chatDisplay.appendChild(div);
+        chatDisplay.scrollTop = chatDisplay.scrollHeight; // Auto-scroll to the latest message
+    } else {
+        console.error("chatDisplay not found. Ensure it's defined in the DOM.");
+    }
+};
+
+
+
 const updateSettings = () => {
-    const newSettings = {
+    const currentSettings = {
         system_prompt: systemPromptInput.value,
         temperature: parseFloat(temperatureInput.value),
         param_1: param1Input.value,
         param_2: param2Input.value
     };
-
-    fetch("/settings", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(newSettings)
-    })
+    fetch("/settings")
         .then(response => response.json())
-        .then(updatedSettings => {
-            console.log("Settings updated:", updatedSettings);
+        .then(existingSettings => {
+            const changes = {};
+            for (let key in currentSettings) {
+                if (currentSettings[key] !== existingSettings[key]) {
+                    changes[key] = currentSettings[key];
+                }
+            }
+            if (Object.keys(changes).length > 0) {
+                return fetch("/settings", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(changes)
+                });
+            }
         })
         .catch(error => console.error("Error updating settings:", error));
 };

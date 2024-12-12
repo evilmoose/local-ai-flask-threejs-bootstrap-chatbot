@@ -4,15 +4,34 @@ from psycopg.rows import dict_row
 from .db_utils import connect_db
 
 def get_user_context(user_id):
-    """
-    Fetch the context for a given user ID.
-    """
     conn = connect_db()
-    with conn.cursor(row_factory=dict_row) as cursor:
-        cursor.execute("SELECT context FROM user_context WHERE user_id = %s", (user_id,))
+    with conn.cursor() as cursor:
+        cursor.execute("""
+            SELECT last_topic, mood, interaction_count, last_interaction_type, additional_data
+            FROM user_context
+            WHERE user_id = %s
+        """, (user_id,))
         result = cursor.fetchone()
     conn.close()
-    return result["context"] if result else {}
+
+    if not result:
+        print(f"DEBUG: No context found for user_id={user_id}, returning defaults.")
+        return {
+            "last_topic": None,
+            "mood": "neutral",
+            "interaction_count": 0,
+            "last_interaction_type": "chat",
+            "additional_data": {}
+        }
+
+    return {
+        "last_topic": result[0],
+        "mood": result[1],
+        "interaction_count": result[2],
+        "last_interaction_type": result[3],
+        "additional_data": result[4]
+    }
+
 
 def update_user_context(user_id, context_update):
     """
@@ -20,9 +39,22 @@ def update_user_context(user_id, context_update):
     """
     conn = connect_db()
     with conn.cursor() as cursor:
-        cursor.execute(
-            "UPDATE user_context SET context = context || %s WHERE user_id = %s",
-            (json.dumps(context_update), user_id)
-        )
+        cursor.execute("""
+            UPDATE user_context
+            SET 
+                last_topic = COALESCE(%s, last_topic),
+                mood = COALESCE(%s, mood),
+                interaction_count = interaction_count + 1,
+                last_interaction_type = COALESCE(%s, last_interaction_type),
+                additional_data = additional_data || %s::jsonb,
+                last_active = NOW()
+            WHERE user_id = %s
+        """, (
+            context_update.get("last_topic"),
+            context_update.get("mood", None),
+            context_update.get("last_interaction_type", None),
+            json.dumps(context_update.get("additional_data", {})),
+            user_id
+        ))
     conn.commit()
     conn.close()
